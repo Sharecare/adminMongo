@@ -18,6 +18,7 @@ var configRoute = require('./routes/config');
 var docRoute = require('./routes/document');
 var dbRoute = require('./routes/database');
 var collectionRoute = require('./routes/collection');
+var debug = require('debug')('adminMongo.App');
 
 // set the base dir to __dirname when running as webapp and electron path if running as electron app
 var dir_base = __dirname;
@@ -98,12 +99,34 @@ if(!fs.existsSync(dir_config)) fs.mkdirSync(dir_config);
 var configApp = {
     app: {}
 };
+
 if(process.env.HOST) configApp.app.host = process.env.HOST;
 if(process.env.PORT) configApp.app.port = process.env.PORT;
 if(process.env.PASSWORD) configApp.app.password = process.env.PASSWORD;
 if(process.env.LOCALE) configApp.app.locale = process.env.LOCALE;
 if(process.env.CONTEXT) configApp.app.context = process.env.CONTEXT;
 if(process.env.MONITORING) configApp.app.monitoring = process.env.MONITORING;
+
+if(process.env.USE_EXTERNAL_AUTH && (process.env.USE_EXTERNAL_AUTH === 'true')) {
+  if (process.env.EXTERNAL_AUTH_HOST && process.env.EXTERNAL_AUTH_CLIENT_ID &&
+      process.env.EXTERNAL_AUTH_TOKEN_URI) {
+    debug(`External authentication enabled`);
+    debug(`Auth Host: ${process.env.EXTERNAL_AUTH_HOST}`);
+    debug(`Auth Token URI: ${process.env.EXTERNAL_AUTH_TOKEN_URI}`);
+    debug(`Auth Client Id: ${process.env.EXTERNAL_AUTH_CLIENT_ID}`);
+    // configApp.app.externalAuth = {};
+    // configApp.app.externalAuth.using = true;
+    // configApp.app.externalAuth.host = process.env.EXTERNAL_AUTH_HOST;
+    // configApp.app.externalAuth.tokenUri = process.env.EXTERNAL_AUTH_TOKEN_URI;
+    // configApp.app.externalAuth.clientId = process.env.EXTERNAL_AUTH_CLIENT_ID;
+  } else {
+
+      // Proper way for Express to handle startup error like this?
+    const error = new Error(`External authentication variables missing or not properly defined`);
+    error.status = 500;
+    throw error;
+  }
+}
 
 if(!fs.existsSync(config_app)) fs.writeFileSync(config_app, JSON.stringify(configApp));
 
@@ -118,7 +141,7 @@ if(process.env.CONN_NAME && process.env.DB_HOST) {
         connectionString += process.env.DB_USERNAME + ':' + process.env.DB_PASSWORD + '@' + process.env.DB_HOST + ':' + process.env.DB_PORT + '/' + process.env.DB_NAME;
     }else if (process.env.DB_USERNAME && process.env.DB_PASSWORD) {
         connectionString += process.env.DB_USERNAME + ':' + process.env.DB_PASSWORD + '@' + process.env.DB_HOST + ':' + process.env.DB_PORT + '/'
-    } else {    
+    } else {
         connectionString += process.env.DB_HOST + ':' + process.env.DB_PORT
     }
     configConnection.connections[process.env.CONN_NAME] = {

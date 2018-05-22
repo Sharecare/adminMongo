@@ -149,6 +149,19 @@ By default `adminMongo` is not password protected. You can add password authenti
 (See the Configuration section). Once added you will need to restart `adminMongo` and all routes will be protected until the correct password is added. You
 will then be authenticated for the life of the session (60 mins by default) or if the "Logout" link is clicked.
 
+#### External Authentication
+
+`adminMongo` can be configured to use any external, OAuth authentication source.  Cookies are used to maintain authentication status.  The following 
+environment variables are *required* for this option:
+
+|Env-variable|Definition|
+|--- |--- |
+|`USE_EXTERNAL_AUTH`|A flag specifying admingMongo intends to use external authentication.  This overrides all other options.  All other options below are required if this is used.| 
+|`EXTERNAL_AUTH_HOST_URL`|The URL for the authentication host to allow authentication credentials to be retrieved| 
+|`EXTERNAL_AUTH_URI`|The URI for the authentication host to retrieve an OAuth access token| 
+|`EXTERNAL_AUTH_CLIENT_ID`|The client username/id for making requests to the authentication source| 
+|`EXTERNAL_AUTH_CLIENT_SECRET`|The client password/secret for making requests to the authentication source| 
+
 ## Usage
 
 ### Create a connection

@@ -2,6 +2,33 @@ var express = require('express');
 var router = express.Router();
 var _ = require('lodash');
 var common = require('./common');
+var jsCookie = require('js-cookie');
+var request = require('request');
+var debug = require('debug')('adminMongo.Index');
+
+const parseHash = hash => hash.substr(1).split('&').reduce((obj, attr) => {
+  const [key, val] = attr.split('=');
+  return {...obj, [key] : val};
+}, {});
+
+const authorize = (clientId, redirectUri) => {
+  debug(`authorize(): Client ${clientId}, Redirect Uri ${redirectUri}`);
+
+  const uri = `${process.env.EXTERNAL_AUTH_HOST}${process.env.EXTERNAL_AUTH_TOKEN_URI}?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}`;
+  debug(`authorize(): Uri is ${uri}`);
+
+  return new Promise((resolve, reject) => {
+    request.get(uri)
+      .on('response', function (res) {
+        debug(`authorize(): GET response ${JSON.stringify(res)}`);
+        resolve();
+      })
+      .on('error', function (error) {
+        debug(`authorize(): An error occurred requesting an access token: ${error.message}`);
+        reject(error);
+      });
+  });
+};
 
 // runs on all routes and checks password if one is setup
 router.all('/*', common.checkLogin, function (req, res, next){
@@ -35,29 +62,79 @@ router.get('/app/', function (req, res, next){
     return;
 });
 
+// This route handles the redirect from the auth source after we
+// have made a successful request for an access token.  The URI
+// to this endpoint was passed to the auth source in that request,
+// and thus incoming requests to this endpoint should come only
+// from there.
+router.get('/app/login/oauth', function (req, res) {
+  debug(`/app/login/oauth(): url is ${req.url}`);
+
+  // #access_token=1234abcd&expires_in=3600
+
+  const credentials = parseHash(req.url);
+  const stringified = JSON.stringify(credentials);
+  debug(`/app/login/oauth(): credentials is ${stringified}`);
+
+  jsCookie.set('credentials', stringified);
+  res.redirect(req.app_context + '/app/');
+
+});
+
 // login page
 router.get('/app/login', function (req, res, next){
-    var passwordConf = req.nconf.app.get('app');
+  debug(`/app/login()`);
 
-    // if password is set then render the login page, else continue
-    if(passwordConf && passwordConf.hasOwnProperty('password')){
-        res.render('login', {
-            message: '',
-            helpers: req.handlebars.helpers
+    // Check to see if we're configured to use an OAuth source.  If
+    // we are, we need to show the login page of that source
+    if (process.env.USE_EXTERNAL_AUTH && (process.env.USE_EXTERNAL_AUTH === 'true')) {
+
+      // Make the call to the authentication source to request an access
+      // token.  We'll take that token and the expiration time and write
+      // that to a cookie before forwarding the user back to the landing
+      // page.
+      const redirectUrl = req.protocol + '://' + req.headers.host + '/app/login/oauth';
+      debug(`/app/login(): redirectUrl is ${redirectUrl}`);
+      authorize(process.env.EXTERNAL_AUTH_CLIENT_ID, encodeURIComponent(redirectUrl))
+        .then(data => {
+          debug(`/app/login(): data is ${data}`);
+          next();
+        })
+        .catch(error => {
+          debug(`/app/login(): An error occurred - ${error.message}`);
+          next(error);
         });
-    }else{
+
+    } else {
+
+      var passwordConf = req.nconf.app.get('app');
+
+      // if password is set then render the login page, else continue
+      if (passwordConf && passwordConf.hasOwnProperty('password')) {
+        res.render('login', {
+          message: '',
+          helpers: req.handlebars.helpers
+        });
+      } else {
         res.redirect(req.app_context + '/');
+      }
     }
 });
 
 // logout
 router.get('/app/logout', function (req, res, next){
+    jsCookie.remove('credentials');
+
     req.session.loggedIn = null;
     res.redirect(req.app_context + '/app');
 });
 
 // login page
 router.post('/app/login_action', function (req, res, next){
+    debug(`/app/login_action`);
+
+    // Need OAuth logic here
+
     var passwordConf = req.nconf.app.get('app');
 
     if(passwordConf && passwordConf.hasOwnProperty('password')){

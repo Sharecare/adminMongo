@@ -1,28 +1,73 @@
 var _ = require('lodash');
 var fs = require('fs');
 var path = require('path');
+var debug = require('debug')('adminMongo.Common');
+var jsCookie = require('js-cookie');
+
+exports.getToken = function(req, res, next){
+  next();
+};
 
 // checks for the password in the /config/app.json file if it's set
 exports.checkLogin = function(req, res, next){
+  debug(`checkLogin()`);
+
+  if (process.env.USE_EXTERNAL_AUTH && (process.env.USE_EXTERNAL_AUTH === 'true')) {
+    debug(`checkLogin() : Using external auth`);
+
+    if (req.path === '/app/login' || req.path === '/app/logout' || req.path === '/app/login_action') {
+      next();
+    } else {
+
+      // Check the cookie to see if the user is logged in via OAuth.  If they
+      // are (cookie present), check the expiration of the token in the cookie.
+      // If the cookie has not expired, they are still logged in; otherwise,
+      // refresh the token.
+      const credentialCookie = jsCookie.get('credentials');
+      if (!credentialCookie) {
+        debug(`checkLogin() : No cookie.  Redirecting to login.`);
+        res.redirect(req.app_context + '/app/login');
+      } else {
+        debug(`checkLogin() : We have cookies!`);
+
+        // Check expiration of cookie
+        try {
+          const parsedCookie = JSON.parse(credentialCookie);
+          const expired = Date.now() >= parsedCookie.expires;
+          if (!expired) {
+            next(); // allow the next route to run
+          } else {
+            res.redirect(req.app_context + '/app/login');
+          }
+        } catch (error) {
+          res.redirect(req.app_context + '/app/login');
+        }
+      }
+    }
+
+  } else {
     var passwordConf = req.nconf.app.get('app');
 
+    debug(`checkLogin(): passwordConf = ${passwordConf}`);
+
     // only check for login if a password is specified in the /config/app.json file
-    if(passwordConf && passwordConf.hasOwnProperty('password')){
-        // dont require login session for login route
-        if(req.path === '/app/login' || req.path === '/app/logout' || req.path === '/app/login_action'){
-            next();
-        }else{
-            // if the session exists we continue, else renter login page
-            if(req.session.loggedIn){
-                next(); // allow the next route to run
-            }else{
-                res.redirect(req.app_context + '/app/login');
-            }
-        }
-    }else{
-        // no password is set so we continue
+    if (passwordConf && passwordConf.hasOwnProperty('password')) {
+      // dont require login session for login route
+      if (req.path === '/app/login' || req.path === '/app/logout' || req.path === '/app/login_action') {
         next();
+      } else {
+        // if the session exists we continue, else renter login page
+        if (req.session.loggedIn) {
+          next(); // allow the next route to run
+        } else {
+          res.redirect(req.app_context + '/app/login');
+        }
+      }
+    } else {
+      // no password is set so we continue
+      next();
     }
+  }
 };
 
 // gets some db stats
