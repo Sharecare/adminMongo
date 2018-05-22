@@ -72,7 +72,7 @@ router.get('/app/login/oauth', function (req, res) {
 
   // #access_token=1234abcd&expires_in=3600
 
-  const credentials = parseHash(req.url);
+  const credentials = parseHash(req.url.substring(req.url.indexOf('#')));
   const stringified = JSON.stringify(credentials);
   debug(`/app/login/oauth(): credentials is ${stringified}`);
 
