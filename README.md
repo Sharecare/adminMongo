@@ -151,16 +151,16 @@ will then be authenticated for the life of the session (60 mins by default) or i
 
 #### External Authentication
 
-`adminMongo` can be configured to use any external, OAuth authentication source.  Cookies are used to maintain authentication status.  The following 
-environment variables are *required* for this option:
+`adminMongo` can be configured to use any external, OAuth2-based authentication source.  Response information from this source will be written as a Cookie 
+to maintain authentication.  The following environment variables are *required* for this option:
 
 |Env-variable|Definition|
 |--- |--- |
-|`USE_EXTERNAL_AUTH`|A flag specifying admingMongo intends to use external authentication.  This overrides all other options.  All other options below are required if this is used.| 
-|`EXTERNAL_AUTH_HOST_URL`|The URL for the authentication host to allow authentication credentials to be retrieved| 
-|`EXTERNAL_AUTH_URI`|The URI for the authentication host to retrieve an OAuth access token| 
-|`EXTERNAL_AUTH_CLIENT_ID`|The client username/id for making requests to the authentication source| 
-|`EXTERNAL_AUTH_CLIENT_SECRET`|The client password/secret for making requests to the authentication source| 
+|`OAUTH_URL`|The URL for the authentication host to allow authentication credentials to be retrieved.  In general, this URL should provide a login page at the authentication source.| 
+|`OAUTH_CLIENT_ID`|The client or application Id for making requests to the authentication source| 
+
+For more information on the URL fragment, see [Quora](https://www.quora.com/Why-do-OAuth-2-0-providers-return-access-tokens-in-the-hash-and-not-the-query-string).  
+For the OAuth2 specification, see [IETF RFC-6749](https://tools.ietf.org/html/rfc6749).
 
 ## Usage
 
