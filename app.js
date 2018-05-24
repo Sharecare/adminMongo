@@ -9,6 +9,7 @@ var session = require('express-session');
 var async = require('async');
 var moment = require('moment');
 var fs = require('fs');
+var debug = require('debug')('adminMongo.app');
 
 // Define routes
 var indexRoute = require('./routes/index');
@@ -105,10 +106,13 @@ if(process.env.LOCALE) configApp.app.locale = process.env.LOCALE;
 if(process.env.CONTEXT) configApp.app.context = process.env.CONTEXT;
 if(process.env.MONITORING) configApp.app.monitoring = process.env.MONITORING;
 
-if (process.env.OAUTH_URL && process.env.OAUTH_CLIENT_ID) {
+if (process.env.OAUTH_AUTHORIZE_URL && process.env.OAUTH_TOKEN_URL &&
+    process.env.OAUTH_CLIENT_ID && process.env.OAUTH_CLIENT_SECRET) {
     configApp.app.oauth = {};
-    configApp.app.oauth.url = process.env.OAUTH_URL;
+    configApp.app.oauth.authorizeUrl = process.env.OAUTH_AUTHORIZE_URL;
+    configApp.app.oauth.tokenUrl = process.env.OAUTH_TOKEN_URL;
     configApp.app.oauth.clientId = process.env.OAUTH_CLIENT_ID;
+    configApp.app.oauth.clientSecret = process.env.OAUTH_CLIENT_SECRET;
 }
 
 if (!fs.existsSync(config_app) || fs.readFileSync(config_app, 'utf8') === '{}')

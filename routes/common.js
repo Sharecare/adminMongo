@@ -2,17 +2,13 @@ var _ = require('lodash');
 var fs = require('fs');
 var path = require('path');
 var debug = require('debug')('adminMongo.Common');
-var jsCookie = require('js-cookie');
 
 // checks for the password in the /config/app.json file if it's set
 exports.checkLogin = function(req, res, next) {
     var appConfig = req.nconf.app.get('app');
-    debug(`checkLogin(): ${JSON.stringify(appConfig)}`);
-
     if (appConfig && appConfig.hasOwnProperty('oauth')) {
-        debug(`checkLogin() : Using external auth`);
 
-        if (req.path === '/app/login' || req.path === '/app/logout' || req.path === '/app/login_action') {
+        if (req.path === '/app/login' || req.path === '/app/login/oauth' || req.path === '/app/logout' || req.path === '/app/login_action') {
             next();
         } else {
 
@@ -20,23 +16,29 @@ exports.checkLogin = function(req, res, next) {
             // are (cookie present), check the expiration of the token in the cookie.
             // If the cookie has not expired, they are still logged in; otherwise,
             // refresh the token.
-            const credentialCookie = jsCookie.get('credentials');
+            const credentialCookie = req.cookies['credentials'];
             if (!credentialCookie) {
-                debug(`checkLogin() : No cookie.  Redirecting to login.`);
+                debug(`checkLogin() : No cookie.  Redirecting to /app/login.`);
                 res.redirect(req.app_context + '/app/login');
             } else {
-                debug(`checkLogin() : We have cookies!`);
+                debug(`checkLogin() : We have a cookie! ${credentialCookie}`);
 
                 // Check expiration of cookie
                 try {
                     const parsedCookie = JSON.parse(credentialCookie);
-                    const expired = Date.now() >= parseInt(parsedCookie.expires_in);
+                    const expired = Date.now() >= parseInt(parsedCookie.expires);
+                    debug(`checkLogin() : expired with ${parsedCookie.expires} is ${expired}`);
+
                     if (!expired) {
                         next(); // allow the next route to run
                     } else {
+                        debug(`checkLogin() : Cookie expired.  Clearing cookie and redirecting to /app/login.`);
+                        res.clearCookie('credentials');
                         res.redirect(req.app_context + '/app/login');
                     }
                 } catch (error) {
+                    debug(`checkLogin() : Error handling cookie.  Clearing cookie and redirecting to /app/login.`);
+                    res.clearCookie('credentials');
                     res.redirect(req.app_context + '/app/login');
                 }
             }

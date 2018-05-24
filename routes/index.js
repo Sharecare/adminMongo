@@ -2,8 +2,8 @@ var express = require('express');
 var router = express.Router();
 var _ = require('lodash');
 var common = require('./common');
-var jsCookie = require('js-cookie');
 var debug = require('debug')('adminMongo.Index');
+var request = require('request');
 
 // Simple function to take a URL fragment designated by the hash (#)
 // character and create a JSON document from it.  The fragment should
@@ -47,21 +47,69 @@ router.get('/app/', function (req, res, next){
 });
 
 // This route handles the redirect response from the OAuth source
-// after we have made a successful request for an access token.
-// The URI to this endpoint was passed to the oauth source in that
-// request, and thus incoming requests to this endpoint should
-// come only from there.  The URL will contain a fragment whicih
-// will contain OAuth response information which will be parsed
-// and stored in a cookie.
-router.get('/app/login/oauth', function (req, res) {
-    debug(`/app/login/oauth(): url is ${req.url}`);
+// after we have made a successful request for an access *code*.
+// Requests to this route should only be coming from the OAuth
+// source.  The OAuth source will redirect to here with a code we
+// then use to make another call to the OAuth source to request an
+// access *token*.  While we don't need the user information from
+// this second response, we do need the expiration time of the token
+// so we'll know when we have to require the user to log in again.
+router.get('/app/login/oauth', function (req, res, next) {
+    var appConfig = req.nconf.app.get('app');
+    debug(`/app/login/oauth(): Incoming code redirect from OAuth source is ${req.url}`);
 
-    const credentials = parseHash(req.url.substring(req.url.indexOf('#')));
-    const stringified = JSON.stringify(credentials);
-    debug(`/app/login/oauth(): credentials is ${stringified}`);
+    // We need to get the access code from the OAUth redirect to then
+    // request an access token
+    const response = parseHash(req.url.substring(req.url.indexOf('?')));
+    debug(`/app/login/oauth(): OAuth source code returned is ${response.code}.`);
 
-    jsCookie.set('credentials', stringified);
-    res.redirect(req.app_context + '/app/');
+    // We now need to make the second call back to the OAuth source to
+    // get an access token.  The reason we do this is purely to get an
+    // expiration date of the token that also comes back in the response
+    // (we don't care about the actual user data since we will force
+    // the user to log in again when the token expires).  We send the
+    // same redirect Uri in the second request, although the OAuth source
+    // only uses this for verification - a second redirect does not happen.
+    const options = {
+        method: 'POST',
+        url: appConfig.oauth.tokenUrl,
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${new Buffer(`${appConfig.oauth.clientId}:${appConfig.oauth.clientSecret}`,).toString('base64')}`
+        },
+        form: {
+            grant_type: 'authorization_code',
+            code: response.code,
+            redirect_uri: req.protocol + '://' + req.headers.host + '/app/login/oauth'
+        }
+    };
+
+    debug(`/app/login/oauth(): Making access token request to OAuth source at ${appConfig.oauth.tokenUrl}.`);
+    request(options, function (error, response, body) {
+        if (error){
+            next(error);
+        } else{
+            debug(`/app/login/oauth(): OAuth access token response code ${response.statusCode}.`);
+
+            if (response.statusCode < 400){
+
+                // Now that we have the token response from the OAuth server,
+                // write the contents of that response to the 'credentials'
+                // cookie then send the user back to the landing page
+                const tokenResponse = JSON.parse(body);
+                tokenResponse.expires = Date.now() + (tokenResponse.expires_in * 1000);
+                const cookieWithExpires = JSON.stringify(tokenResponse);
+                debug(`cookieWithExpires is ${cookieWithExpires}`);
+
+                res.cookie('credentials', cookieWithExpires);
+                res.redirect(req.app_context + '/');
+            } else {
+                debug(`/app/login/oauth(): Error response is ${response.body}.`);
+                const body = JSON.parse(response.body);
+                next(new Error(body.error_description));
+            }
+        }
+    });
 });
 
 // login page
@@ -75,11 +123,10 @@ router.get('/app/login', function (req, res, next){
         // source will display a login page, and once successful, will
         // redirect back to the OAuth endpoint in adminMongo so the
         // credentials can be stored.
+        debug(`/app/login(): Attempting to log in with OAuth source`);
         const redirectUri = encodeURIComponent(req.protocol + '://' + req.headers.host + '/app/login/oauth');
-        const tokenUrl = `${oAuthConfig.url}?response_type=token&client_id=${oAuthConfig.clientId}&redirect_uri=${redirectUri}`;
-        debug(`OAuth Url is ${tokenUrl}`);
-
-        res.redirect(tokenUrl);
+        const codeRequestUrl = `${oAuthConfig.authorizeUrl}?response_type=code&client_id=${oAuthConfig.clientId}&redirect_uri=${redirectUri}`;
+        res.redirect(codeRequestUrl);
     } else {
 
         // if password is set then render the login page, else continue
@@ -96,7 +143,7 @@ router.get('/app/login', function (req, res, next){
 
 // logout
 router.get('/app/logout', function (req, res, next){
-    jsCookie.remove('credentials');
+    res.clearCookie('credentials');
 
     req.session.loggedIn = null;
     res.redirect(req.app_context + '/app');
