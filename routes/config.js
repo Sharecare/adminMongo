@@ -131,4 +131,53 @@ router.post('/config/drop_config', function (req, res, next){
     });
 });
 
+// Provides for connecting to a private connection (a connection that requires a
+// username and password we don't want stored and be visible)
+router.post('/config/connect_to_private', function (req, res, next){
+    var nconf = req.nconf.connections;
+    var connPool = require('../connections');
+    var MongoURI = require('mongo-uri');
+
+    var connectionStringToValidate = req.body.conn_string;
+    if (req.body.conn_username && req.body.conn_password) {
+        connectionStringToValidate = connectionStringToValidate.replace('{USERNAME}', req.body.conn_username).replace('{PASSWORD}', req.body.conn_password);
+    }
+
+    // try parse uri string. If pass, add, else throw an error
+    try{
+        MongoURI.parse(connectionStringToValidate);
+
+        // var get current options
+        var current_options = nconf.store.connections[req.body.curr_config].connection_options;
+
+        // try add the connection
+        connPool.addConnection({connName: req.body.curr_config, connString: connectionStringToValidate, connOptions: current_options}, req.app, function (err, data){
+            if(err){
+                console.error('DB Connect error: ' + err);
+                res.status(400).json({'msg': req.i18n.__('Connect error') + ': ' + err});
+            }else{
+                // delete current config
+                delete nconf.store.connections[req.body.curr_config];
+
+                // set the new
+                nconf.set('connections:' + req.body.curr_config, {'connection_string': req.body.conn_string, 'connection_options': current_options});
+
+                // save for ron
+                nconf.save(function (err){
+                    if(err){
+                        console.error('Config error1: ' + err);
+                        res.status(400).json({'msg': req.i18n.__('Connect error') + ': ' + err});
+                    }else{
+                        res.status(200).json({'msg': req.i18n.__('Credentials validated'), 'name': req.body.conn_name, 'string': req.body.conn_string});
+                    }
+                });
+            }
+        });
+    }catch(err){
+        console.error('Config error: ' + err);
+        res.status(400).json({'msg': req.i18n.__('Connect error') + ': ' + err});
+    }
+
+});
+
 module.exports = router;

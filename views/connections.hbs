@@ -3,19 +3,25 @@
 <div class="col-lg-12">
     <div class="col-lg-12">
         <table class="table table-responsive">
-            {{#each connection_list}}
+            {{#hasConnections connection_list}}
             <thead>
                 <tr>
                     <th class="col-md-2 text-center">{{__ "Connection name"}}</th>
-                    <th class="col-md-4 text-center">{{__ "Connection string"}}</th>
-                    <th class="col-md-3 text-center">{{__ "Connection options"}}</th>
-                    <th class="col-md-4 text-center">{{__ "Action"}}</th>
+                    <th class="col-md-3 text-center">{{__ "Connection string"}}</th>
+                    <th class="col-md-2 text-center">{{__ "Connection options"}}</th>
+                    <th class="col-md-1 text-center">{{__ "Connection username"}}</th>
+                    <th class="col-md-1 text-center">{{__ "Connection password"}}</th>
+                    <th class="col-md-3 text-center">{{__ "Action"}}</th>
                 </tr>
             </thead>
+            {{/hasConnections}}
+            {{#each connection_list}}
                 <tr class="connectionRow">
                     <td><input type="text" class="form-control input-sm conf_conn_name" value="{{@key}}"></td>
                     <td><input type="text" class="form-control input-sm conf_conn_string" value="{{this.connection_string}}"></td>
                     <td><pre class="code-block conectionOptions"><code class="json">{{{toJSON this.connection_options}}}</code></pre></td>
+                    <td><input type="text" class="form-control input-sm conf_conn_username" placeholder="{{__ "Username"}}"></td>
+                    <td><input type="password" class="form-control input-sm conf_conn_password" placeholder="{{__ "Password"}}"></td>
                     <td class="text-center conn_id" id="{{@key}}">
                         <div class="btn-group" role="group" aria-label="ConnButtons">
                             <button class="btn btn-danger btn-sm pull-left btnConnDelete">{{__ "Delete"}}</button>
@@ -31,7 +37,9 @@
             <tr>
                 <td class="text-center"><strong>{{__ "Connection name"}}</strong></td>
                 <td class="text-center"><strong>{{__ "Connection string"}}</strong></td>
-                <td class="text-center"><strong>{{__ "Connection options"}}</strong> (See <a href="http://mongodb.github.io/node-mongodb-native/2.1/reference/connecting/connection-settings/" target="_blank">docs</a>)</td>
+                <td class="text-center"><strong>{{__ "Connection options"}}</strong><br>(See <a href="http://mongodb.github.io/node-mongodb-native/2.1/reference/connecting/connection-settings/" target="_blank">docs</a>)</td>
+                <td class="text-center"><strong>{{__ "Connection username"}}</strong></td>
+                <td class="text-center"><strong>{{__ "Connection password"}}</strong></td>
                 <th class="text-center"><strong>{{__ "Action"}}</strong></th>
             </tr>
             <tr class="connectionRow">
@@ -43,6 +51,12 @@
                 </td>
                 <td>
                     <div class="connection_json" id="json">{}</div>
+                </td>
+                <td>
+                    <input type="text" class="form-control input-sm" id="new_conf_username" name="new_conf_username" placeholder="{{__ "Username"}}">
+                </td>
+                <td>
+                    <input type="password" class="form-control input-sm" id="new_conf_password" name="new_conf_password" placeholder="{{__ "Password"}}">
                 </td>
                 <td class="text-center">
                     <button class="btn btn-success btn-sm" id="add_config">{{__ "Add connection"}}</button>

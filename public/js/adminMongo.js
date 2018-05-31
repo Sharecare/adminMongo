@@ -348,7 +348,6 @@ $(document).ready(function(){
     $(document).on('click', '.btnConnDelete', function(){
         if(confirm('WARNING: Are you sure you want to delete this connection?') === true){
             var current_name = $(this).parents('.conn_id').attr('id');
-//            var rowElement = $(this).parents('.connectionRow');
 
             $.ajax({
                 method: 'POST',
@@ -356,7 +355,6 @@ $(document).ready(function(){
                 data: {'curr_config': current_name}
             })
             .done(function(data){
-//                rowElement.remove();
                 show_notification(data.msg, 'success');
                 setInterval(function (){
                     location.reload();
@@ -373,12 +371,8 @@ $(document).ready(function(){
             var current_name = $(this).parents('.conn_id').attr('id');
             var new_name = $(this).parents('.connectionRow').find('.conf_conn_name').val();
             var new_string = $(this).parents('.connectionRow').find('.conf_conn_string').val();
-
             var new_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
             var new_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
-
-            console.log(`Username is ${new_username}`);
-            console.log(`Password is ${new_password}`);
 
             const usernamePlaceholderPresent = new_string.indexOf('{USERNAME}') >= 0;
             const passwordPlaceholderPresent = new_string.indexOf('{PASSWORD}') >= 0;
@@ -412,7 +406,46 @@ $(document).ready(function(){
 
     // redirect to connection
     $(document).on('click', '.btnConnConnect', function(){
-        window.location.href = $('#app_context').val() + '/app/' + $(this).parents('.conn_id').attr('id');
+
+        var current_name = $(this).parents('.conn_id').attr('id');
+        var new_string = $(this).parents('.connectionRow').find('.conf_conn_string').val();
+        var new_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
+        var new_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
+
+        const usernamePlaceholderPresent = new_string.indexOf('{USERNAME}') >= 0;
+        const passwordPlaceholderPresent = new_string.indexOf('{PASSWORD}') >= 0;
+        if (usernamePlaceholderPresent && passwordPlaceholderPresent) {
+            if (!new_username && !new_password){
+                show_notification('Private connections require a username and password', 'danger');
+            } else {
+
+                // If we've gotten here, we have a private connection that needs to be
+                // verified.  Pass the entered credentials in, verity them, and replace
+                // the connection that's there, then send the user to the database screen
+                // for that connection.
+                $.ajax({
+                    method: 'POST',
+                    url: $('#app_context').val() + '/config/connect_to_private',
+                    data: {
+                        'curr_config': current_name,
+                        'conn_string': new_string,
+                        'conn_username': new_username,
+                        'conn_password': new_password}
+                })
+                    .done(function (data){
+                        show_notification(data.msg, 'success', true);
+                        setInterval(function (){
+                            window.location.href = $('#app_context').val() + '/app/' + current_name;
+                        }, 2500);
+                    })
+                    .fail(function (data){
+                        show_notification(data.responseJSON.msg, 'danger');
+                    });
+
+            }
+        } else{
+            window.location.href = $('#app_context').val() + '/app/' + current_name;
+        }
     });
 });
 
