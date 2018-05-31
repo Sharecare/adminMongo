@@ -1,7 +1,6 @@
 var _ = require('lodash');
 var fs = require('fs');
 var path = require('path');
-var debug = require('debug')('adminMongo.Common');
 
 // checks for the password in the /config/app.json file if it's set
 exports.checkLogin = function(req, res, next) {
@@ -15,29 +14,26 @@ exports.checkLogin = function(req, res, next) {
             // Check the cookie to see if the user is logged in via OAuth.  If they
             // are (cookie present), check the expiration of the token in the cookie.
             // If the cookie has not expired, they are still logged in; otherwise,
-            // refresh the token.
+            // delete the cookie and force them to log in again.
             const credentialCookie = req.cookies['credentials'];
             if (!credentialCookie) {
-                debug(`checkLogin() : No cookie.  Redirecting to /app/login.`);
                 res.redirect(req.app_context + '/app/login');
             } else {
-                debug(`checkLogin() : We have a cookie! ${credentialCookie}`);
 
                 // Check expiration of cookie
                 try {
                     const parsedCookie = JSON.parse(credentialCookie);
                     const expired = Date.now() >= parseInt(parsedCookie.expires);
-                    debug(`checkLogin() : expired with ${parsedCookie.expires} is ${expired}`);
 
                     if (!expired) {
                         next(); // allow the next route to run
                     } else {
-                        debug(`checkLogin() : Cookie expired.  Clearing cookie and redirecting to /app/login.`);
+                        req.session.loggedIn = false;
                         res.clearCookie('credentials');
                         res.redirect(req.app_context + '/app/login');
                     }
                 } catch (error) {
-                    debug(`checkLogin() : Error handling cookie.  Clearing cookie and redirecting to /app/login.`);
+                    req.session.loggedIn = false;
                     res.clearCookie('credentials');
                     res.redirect(req.app_context + '/app/login');
                 }

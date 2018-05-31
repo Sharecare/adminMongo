@@ -2,14 +2,9 @@ var express = require('express');
 var router = express.Router();
 var _ = require('lodash');
 var common = require('./common');
-var debug = require('debug')('adminMongo.Index');
 var request = require('request');
 
-// Simple function to take a URL fragment designated by the hash (#)
-// character and create a JSON document from it.  The fragment should
-// look something like this:
-//     https://www.example.com/app/login/oauth#access_token=abc123&expires_in=3600
-const parseHash = hash => hash.substr(1).split('&').reduce((obj, attr) => {
+const convertQueryParamsToDocument = hash => hash.substr(1).split('&').reduce((obj, attr) => {
     const [key, val] = attr.split('=');
     return {...obj, [key] : val};
 }, {});
@@ -37,7 +32,20 @@ router.get('/app/', function (req, res, next){
         if(Object.keys(connection_list).length > 0){
             // we have a connection and redirect to the first
             var first_conn = Object.keys(connection_list)[0];
-            res.redirect(req.app_context + '/app/' + first_conn);
+
+            // If the first connection is a 'private' connection
+            // that requires input of credentials, do not
+            // automatically connect to it
+            var connectionString = connection_list[first_conn].connection_string;
+            console.log(`First connection string is ${connectionString}`);
+
+            const usernamePlaceholderPresent = connectionString.indexOf('{USERNAME}') >= 0;
+            const passwordPlaceholderPresent = connectionString.indexOf('{PASSWORD}') >= 0;
+            if (usernamePlaceholderPresent && passwordPlaceholderPresent) {
+                res.redirect(req.app_context + '/app/connection_list');
+            } else {
+                res.redirect(req.app_context + '/app/' + first_conn);
+            }
             return;
         }
     }
@@ -56,12 +64,10 @@ router.get('/app/', function (req, res, next){
 // so we'll know when we have to require the user to log in again.
 router.get('/app/login/oauth', function (req, res, next) {
     var appConfig = req.nconf.app.get('app');
-    debug(`/app/login/oauth(): Incoming code redirect from OAuth source is ${req.url}`);
 
-    // We need to get the access code from the OAUth redirect to then
+    // We need to get the access code from the OAuth redirect to then
     // request an access token
-    const response = parseHash(req.url.substring(req.url.indexOf('?')));
-    debug(`/app/login/oauth(): OAuth source code returned is ${response.code}.`);
+    const response = convertQueryParamsToDocument(req.url.substring(req.url.indexOf('?')));
 
     // We now need to make the second call back to the OAuth source to
     // get an access token.  The reason we do this is purely to get an
@@ -84,13 +90,10 @@ router.get('/app/login/oauth', function (req, res, next) {
         }
     };
 
-    debug(`/app/login/oauth(): Making access token request to OAuth source at ${appConfig.oauth.tokenUrl}.`);
     request(options, function (error, response, body) {
         if (error){
             next(error);
         } else{
-            debug(`/app/login/oauth(): OAuth access token response code ${response.statusCode}.`);
-
             if (response.statusCode < 400){
 
                 // Now that we have the token response from the OAuth server,
@@ -99,12 +102,11 @@ router.get('/app/login/oauth', function (req, res, next) {
                 const tokenResponse = JSON.parse(body);
                 tokenResponse.expires = Date.now() + (tokenResponse.expires_in * 1000);
                 const cookieWithExpires = JSON.stringify(tokenResponse);
-                debug(`cookieWithExpires is ${cookieWithExpires}`);
 
+                req.session.loggedIn = true;
                 res.cookie('credentials', cookieWithExpires);
                 res.redirect(req.app_context + '/');
             } else {
-                debug(`/app/login/oauth(): Error response is ${response.body}.`);
                 const body = JSON.parse(response.body);
                 next(new Error(body.error_description));
             }
@@ -123,7 +125,6 @@ router.get('/app/login', function (req, res, next){
         // source will display a login page, and once successful, will
         // redirect back to the OAuth endpoint in adminMongo so the
         // credentials can be stored.
-        debug(`/app/login(): Attempting to log in with OAuth source`);
         const redirectUri = encodeURIComponent(req.protocol + '://' + req.headers.host + '/app/login/oauth');
         const codeRequestUrl = `${oAuthConfig.authorizeUrl}?response_type=code&client_id=${oAuthConfig.clientId}&redirect_uri=${redirectUri}`;
         res.redirect(codeRequestUrl);
@@ -143,10 +144,21 @@ router.get('/app/login', function (req, res, next){
 
 // logout
 router.get('/app/logout', function (req, res, next){
-    res.clearCookie('credentials');
-
     req.session.loggedIn = null;
-    res.redirect(req.app_context + '/app');
+
+    // For OAuth, we need to call the endpoint in the source to log us out
+    // from there.  Most likely, this will involve a cookie, but we also
+    // need to make sure we remove ours as well.
+    var appConfig = req.nconf.app.get('app');
+    if (appConfig && appConfig.hasOwnProperty('oauth')) {
+        const oAuthConfig = appConfig.oauth;
+        res.clearCookie('credentials');
+        const redirectUri = encodeURIComponent(req.protocol + '://' + req.headers.host + '/app/login');
+        const redirectTo = `${oAuthConfig.logoutUrl}?redirect_uri=${redirectUri}`;
+        res.redirect(redirectTo);
+    } else {
+        res.redirect(req.app_context + '/app');
+    }
 });
 
 // login page

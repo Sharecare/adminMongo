@@ -22,9 +22,14 @@ router.post('/config/add_config', function (req, res, next){
         }
     }
 
+    var connectionStringToValidate = req.body[1];
+    if (req.body[3] && req.body[4]) {
+        connectionStringToValidate = connectionStringToValidate.replace('{USERNAME}', req.body[3]).replace('{PASSWORD}', req.body[4]);
+    }
+
     // try parse uri string. If pass, add, else throw an error
     try{
-        MongoURI.parse(req.body[1]);
+        MongoURI.parse(connectionStringToValidate);
         var options = {};
         try{
             options = JSON.parse(req.body[2]);
@@ -34,7 +39,7 @@ router.post('/config/add_config', function (req, res, next){
         }
 
         // try add the connection
-        connPool.addConnection({connName: req.body[0], connString: req.body[1], connOptions: options}, req.app, function (err, data){
+        connPool.addConnection({connName: req.body[0], connString: connectionStringToValidate, connOptions: options}, req.app, function (err, data){
             if(err){
                 console.error('DB Connect error: ' + err);
                 res.status(400).json({'msg': req.i18n.__('Config error') + ': ' + err});
@@ -65,15 +70,20 @@ router.post('/config/update_config', function (req, res, next){
     var connPool = require('../connections');
     var MongoURI = require('mongo-uri');
 
+    var connectionStringToValidate = req.body.conn_string;
+    if (req.body.conn_username && req.body.conn_password) {
+        connectionStringToValidate = connectionStringToValidate.replace('{USERNAME}', req.body.conn_username).replace('{PASSWORD}', req.body.conn_password);
+    }
+
     // try parse uri string. If pass, add, else throw an error
     try{
-        MongoURI.parse(req.body.conn_string);
+        MongoURI.parse(connectionStringToValidate);
 
         // var get current options
         var current_options = nconf.store.connections[req.body.curr_config].connection_options;
 
         // try add the connection
-        connPool.addConnection({connName: req.body.conn_name, connString: req.body.conn_string, connOptions: current_options}, req.app, function (err, data){
+        connPool.addConnection({connName: req.body.conn_name, connString: connectionStringToValidate, connOptions: current_options}, req.app, function (err, data){
             if(err){
                 console.error('DB Connect error: ' + err);
                 res.status(400).json({'msg': req.i18n.__('Config error') + ': ' + err});

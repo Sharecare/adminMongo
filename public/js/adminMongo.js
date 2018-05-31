@@ -127,7 +127,7 @@ $(document).ready(function(){
                 var query_string = toEJSON.serializeString('{"_id":ObjectId("' + val + '")}');
                 localStorage.setItem('searchQuery', query_string);
             }
-            
+
             // go to page 1 to remove any issues being on page X from another query/view
             window.location.href = $('#app_context').val() + '/app/' + $('#conn_name').val() + '/' + $('#db_name').val() + '/' + $('#coll_name').val() + '/view/1';
 
@@ -302,6 +302,7 @@ $(document).ready(function(){
     });
 
     $(document).on('click', '#add_config', function(){
+
         if($('#new_conf_conn_name').val() !== '' && $('#new_conf_conn_string').val() !== ''){
             var editor = ace.edit('json');
             var editor_val = editor.getValue();
@@ -314,21 +315,31 @@ $(document).ready(function(){
             data_obj[0] = $('#new_conf_conn_name').val();
             data_obj[1] = $('#new_conf_conn_string').val();
             data_obj[2] = editor_val;
+            data_obj[3] = $('#new_conf_username').val();
+            data_obj[4] = $('#new_conf_password').val();
 
-            $.ajax({
-                method: 'POST',
-                url: $('#app_context').val() + '/config/add_config',
-                data: data_obj
-            })
-            .done(function(data){
-                show_notification(data.msg, 'success');
-                setInterval(function(){
-                    location.reload();
-                }, 2500);
-            })
-            .fail(function(data){
-                show_notification(data.responseJSON.msg, 'danger');
-            });
+            const usernamePlaceholderPresent = data_obj[1].indexOf('{USERNAME}') >= 0;
+            const passwordPlaceholderPresent = data_obj[1].indexOf('{PASSWORD}') >= 0;
+            if (usernamePlaceholderPresent && passwordPlaceholderPresent && !data_obj[3] && !data_obj[4]) {
+                show_notification('Private connections require a username and password', 'danger');
+            } else {
+
+                $.ajax({
+                    method: 'POST',
+                    url: $('#app_context').val() + '/config/add_config',
+                    data: data_obj
+                })
+                    .done(function (data){
+                        show_notification(data.msg, 'success');
+                        setInterval(function (){
+                            location.reload();
+                        }, 2500);
+                    })
+                    .fail(function (data){
+                        show_notification(data.responseJSON.msg, 'danger');
+                    });
+            }
+
         }else{
             show_notification('Please enter both a connection name and connection string', 'danger');
         }
@@ -337,7 +348,7 @@ $(document).ready(function(){
     $(document).on('click', '.btnConnDelete', function(){
         if(confirm('WARNING: Are you sure you want to delete this connection?') === true){
             var current_name = $(this).parents('.conn_id').attr('id');
-            var rowElement = $(this).parents('.connectionRow');
+//            var rowElement = $(this).parents('.connectionRow');
 
             $.ajax({
                 method: 'POST',
@@ -345,8 +356,11 @@ $(document).ready(function(){
                 data: {'curr_config': current_name}
             })
             .done(function(data){
-                rowElement.remove();
+//                rowElement.remove();
                 show_notification(data.msg, 'success');
+                setInterval(function (){
+                    location.reload();
+                }, 1000);
             })
             .fail(function(data){
                 show_notification(data.responseJSON.msg, 'danger');
@@ -360,19 +374,37 @@ $(document).ready(function(){
             var new_name = $(this).parents('.connectionRow').find('.conf_conn_name').val();
             var new_string = $(this).parents('.connectionRow').find('.conf_conn_string').val();
 
-            $.ajax({
-                method: 'POST',
-                url: $('#app_context').val() + '/config/update_config',
-                data: {'curr_config': current_name, 'conn_name': new_name, 'conn_string': new_string}
-            })
-            .done(function(data){
-                $(this).parents('.connectionRow').find('.conf_conn_name').val(data.name);
-                $(this).parents('.connectionRow').find('.conf_conn_string').val(data.string);
-                show_notification(data.msg, 'success', true);
-            })
-            .fail(function(data){
-                show_notification(data.responseJSON.msg, 'danger');
-            });
+            var new_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
+            var new_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
+
+            console.log(`Username is ${new_username}`);
+            console.log(`Password is ${new_password}`);
+
+            const usernamePlaceholderPresent = new_string.indexOf('{USERNAME}') >= 0;
+            const passwordPlaceholderPresent = new_string.indexOf('{PASSWORD}') >= 0;
+            if (usernamePlaceholderPresent && passwordPlaceholderPresent && !new_username && !new_password) {
+                show_notification('Private connections require a username and password', 'danger');
+            } else{
+
+                $.ajax({
+                    method: 'POST',
+                    url: $('#app_context').val() + '/config/update_config',
+                    data: {
+                        'curr_config': current_name,
+                        'conn_name': new_name,
+                        'conn_string': new_string,
+                        'conn_username': new_username,
+                        'conn_password': new_password}
+                })
+                    .done(function (data){
+                        $(this).parents('.connectionRow').find('.conf_conn_name').val(data.name);
+                        $(this).parents('.connectionRow').find('.conf_conn_string').val(data.string);
+                        show_notification(data.msg, 'success', true);
+                    })
+                    .fail(function (data){
+                        show_notification(data.responseJSON.msg, 'danger');
+                    });
+            }
         }else{
             show_notification('Please enter a connection name and connection string', 'danger');
         }

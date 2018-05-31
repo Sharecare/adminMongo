@@ -9,7 +9,6 @@ var session = require('express-session');
 var async = require('async');
 var moment = require('moment');
 var fs = require('fs');
-var debug = require('debug')('adminMongo.app');
 
 // Define routes
 var indexRoute = require('./routes/index');
@@ -82,6 +81,9 @@ handlebars = handlebars.create({
         },
         formatDuration: function(time){
             return moment.duration(time, 'seconds').humanize();
+        },
+        hasConnections: function(connections, options){
+            return ((Object.keys(connections).length > 0)) ? options.fn(this) : options.inverse(this);
         }
     }
 });
@@ -107,10 +109,12 @@ if(process.env.CONTEXT) configApp.app.context = process.env.CONTEXT;
 if(process.env.MONITORING) configApp.app.monitoring = process.env.MONITORING;
 
 if (process.env.OAUTH_AUTHORIZE_URL && process.env.OAUTH_TOKEN_URL &&
-    process.env.OAUTH_CLIENT_ID && process.env.OAUTH_CLIENT_SECRET) {
+    process.env.OAUTH_CLIENT_ID && process.env.OAUTH_CLIENT_SECRET &&
+    process.env.OAUTH_LOGOUT_URL) {
     configApp.app.oauth = {};
     configApp.app.oauth.authorizeUrl = process.env.OAUTH_AUTHORIZE_URL;
     configApp.app.oauth.tokenUrl = process.env.OAUTH_TOKEN_URL;
+    configApp.app.oauth.logoutUrl = process.env.OAUTH_LOGOUT_URL;
     configApp.app.oauth.clientId = process.env.OAUTH_CLIENT_ID;
     configApp.app.oauth.clientSecret = process.env.OAUTH_CLIENT_SECRET;
 }
@@ -284,13 +288,18 @@ async.forEachOf(connection_list, function (value, key, callback){
     try{
         MongoURI.parse(value.connection_string);
         connPool.addConnection({connName: key, connString: value.connection_string, connOptions: value.connection_options}, app, function (err, data){
-            if(err)delete connection_list[key];
+            if(err) {
+                if ((value.connection_string.indexOf('{USERNAME}') < 0) && (value.connection_string.indexOf('{PASSWORD}') < 0)){
+                    console.error(`Error connecting to '${key}' : ${err.message}`);
+                    delete connection_list[key];
+                } else
+                    console.log(`Connection '${key}' has security placeholders - skipping validation.  Connection validation will occur upon usage.`);
+            }
             callback();
         });
     }catch(err){
         callback();
-    }
-},
+    }},
     function (err){
         if(err) console.error(err.message);
         // lift the app
