@@ -33,14 +33,14 @@ router.get('/app/', function (req, res, next){
             // we have a connection and redirect to the first
             var first_conn = Object.keys(connection_list)[0];
 
-            // If the first connection is a 'private' connection
+            // If the first connection is a 'protected' connection
             // that requires input of credentials, do not
             // automatically connect to it
             var connectionString = connection_list[first_conn].connection_string;
             console.log(`First connection string is ${connectionString}`);
 
-            const usernamePlaceholderPresent = connectionString.indexOf('{USERNAME}') >= 0;
-            const passwordPlaceholderPresent = connectionString.indexOf('{PASSWORD}') >= 0;
+            const usernamePlaceholderPresent = connectionString.indexOf('{DB_USERNAME}') >= 0;
+            const passwordPlaceholderPresent = connectionString.indexOf('{DB_PASSWORD}') >= 0;
             if (usernamePlaceholderPresent && passwordPlaceholderPresent) {
                 res.redirect(req.app_context + '/app/connection_list');
             } else {

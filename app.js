@@ -289,11 +289,11 @@ async.forEachOf(connection_list, function (value, key, callback){
         MongoURI.parse(value.connection_string);
         connPool.addConnection({connName: key, connString: value.connection_string, connOptions: value.connection_options}, app, function (err, data){
             if(err) {
-                if ((value.connection_string.indexOf('{USERNAME}') < 0) && (value.connection_string.indexOf('{PASSWORD}') < 0)){
+                if ((value.connection_string.indexOf('{DB_USERNAME}') < 0) && (value.connection_string.indexOf('{DB_PASSWORD}') < 0)){
                     console.error(`Error connecting to '${key}' : ${err.message}`);
                     delete connection_list[key];
                 } else
-                    console.log(`Connection '${key}' has security placeholders - skipping validation.  Connection validation will occur upon usage.`);
+                    console.log(`Connection '${key}' protected - skipping validation.  Connection validation will occur upon usage.`);
             }
             callback();
         });

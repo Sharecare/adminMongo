@@ -1,4 +1,11 @@
 $(document).ready(function(){
+
+    function isSet(stringValue) {
+        return (((typeof stringValue !== "undefined") &&
+            (typeof stringValue.valueOf() === "string")) &&
+            (stringValue.length > 0));
+    }
+
     // paginate if value is set
     if($('#to_paginate').val() === 'true'){
         if(localStorage.getItem('message_text')){
@@ -318,10 +325,10 @@ $(document).ready(function(){
             data_obj[3] = $('#new_conf_username').val();
             data_obj[4] = $('#new_conf_password').val();
 
-            const usernamePlaceholderPresent = data_obj[1].indexOf('{USERNAME}') >= 0;
-            const passwordPlaceholderPresent = data_obj[1].indexOf('{PASSWORD}') >= 0;
-            if (usernamePlaceholderPresent && passwordPlaceholderPresent && !data_obj[3] && !data_obj[4]) {
-                show_notification('Private connections require a username and password', 'danger');
+            const usernamePlaceholderPresent = data_obj[1].indexOf('{DB_USERNAME}') >= 0;
+            const passwordPlaceholderPresent = data_obj[1].indexOf('{DB_PASSWORD}') >= 0;
+            if (usernamePlaceholderPresent && passwordPlaceholderPresent && (!isSet(data_obj[3]) || !isSet(data_obj[4]))) {
+                show_notification('Protected connections require a username and password', 'danger');
             } else {
 
                 $.ajax({
@@ -346,23 +353,39 @@ $(document).ready(function(){
     });
 
     $(document).on('click', '.btnConnDelete', function(){
-        if(confirm('WARNING: Are you sure you want to delete this connection?') === true){
-            var current_name = $(this).parents('.conn_id').attr('id');
 
-            $.ajax({
-                method: 'POST',
-                url: $('#app_context').val() + '/config/drop_config',
-                data: {'curr_config': current_name}
-            })
-            .done(function(data){
-                show_notification(data.msg, 'success');
-                setInterval(function (){
-                    location.reload();
-                }, 1000);
-            })
-            .fail(function(data){
-                show_notification(data.responseJSON.msg, 'danger');
-            });
+        var conn_string = $(this).parents('.connectionRow').find('.conf_conn_string').val();
+        var conn_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
+        var conn_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
+
+        const usernamePlaceholderPresent = conn_string.indexOf('{DB_USERNAME}') >= 0;
+        const passwordPlaceholderPresent = conn_string.indexOf('{DB_PASSWORD}') >= 0;
+        if (usernamePlaceholderPresent && passwordPlaceholderPresent && (!isSet(conn_username) || !isSet(conn_password))) {
+            show_notification('Protected connections require a username and password', 'danger');
+        } else{
+            if(confirm('WARNING: Are you sure you want to delete this connection?') === true){
+                var current_name = $(this).parents('.conn_id').attr('id');
+
+                $.ajax({
+                    method: 'POST',
+                    url: $('#app_context').val() + '/config/drop_config',
+                    data: {
+                        'curr_config': current_name,
+                        conn_string,
+                        conn_username,
+                        conn_password
+                    }
+                })
+                    .done(function (data){
+                        show_notification(data.msg, 'success');
+                        setInterval(function (){
+                            location.reload();
+                        }, 1000);
+                    })
+                    .fail(function (data){
+                        show_notification(data.responseJSON.msg, 'danger');
+                    });
+            }
         }
     });
 
@@ -374,10 +397,10 @@ $(document).ready(function(){
             var new_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
             var new_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
 
-            const usernamePlaceholderPresent = new_string.indexOf('{USERNAME}') >= 0;
-            const passwordPlaceholderPresent = new_string.indexOf('{PASSWORD}') >= 0;
-            if (usernamePlaceholderPresent && passwordPlaceholderPresent && !new_username && !new_password) {
-                show_notification('Private connections require a username and password', 'danger');
+            const usernamePlaceholderPresent = new_string.indexOf('{DB_USERNAME}') >= 0;
+            const passwordPlaceholderPresent = new_string.indexOf('{DB_PASSWORD}') >= 0;
+            if (usernamePlaceholderPresent && passwordPlaceholderPresent && (!isSet(new_username) || !isSet(new_password))) {
+                show_notification('Protected connections require a username and password', 'danger');
             } else{
 
                 $.ajax({
@@ -412,20 +435,20 @@ $(document).ready(function(){
         var new_username = $(this).parents('.connectionRow').find('.conf_conn_username').val();
         var new_password = $(this).parents('.connectionRow').find('.conf_conn_password').val();
 
-        const usernamePlaceholderPresent = new_string.indexOf('{USERNAME}') >= 0;
-        const passwordPlaceholderPresent = new_string.indexOf('{PASSWORD}') >= 0;
+        const usernamePlaceholderPresent = new_string.indexOf('{DB_USERNAME}') >= 0;
+        const passwordPlaceholderPresent = new_string.indexOf('{DB_PASSWORD}') >= 0;
         if (usernamePlaceholderPresent && passwordPlaceholderPresent) {
-            if (!new_username && !new_password){
-                show_notification('Private connections require a username and password', 'danger');
+            if (!isSet(new_username) || !isSet(new_password)){
+                show_notification('Protected connections require a username and password', 'danger');
             } else {
 
-                // If we've gotten here, we have a private connection that needs to be
+                // If we've gotten here, we have a protected connection that needs to be
                 // verified.  Pass the entered credentials in, verity them, and replace
                 // the connection that's there, then send the user to the database screen
                 // for that connection.
                 $.ajax({
                     method: 'POST',
-                    url: $('#app_context').val() + '/config/connect_to_private',
+                    url: $('#app_context').val() + '/config/connect_to_protected',
                     data: {
                         'curr_config': current_name,
                         'conn_string': new_string,

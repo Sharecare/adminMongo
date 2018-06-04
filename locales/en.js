@@ -130,5 +130,9 @@
 	"Backup": "Backup",
 	"Database successfully backed up": "Database successfully backed up",
 	"Query": "Query",
-	"Indexes": "Indexes"
+	"Indexes": "Indexes",
+	"Connection username": "Connection username",
+	"Connection password": "Connection password",
+	"Credentials validated": "Credentials validated",
+	"Delete error": "Delete error"
 }

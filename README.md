@@ -7,7 +7,7 @@
 
 adminMongo is a cross platform user interface (GUI) to handle all your MongoDB connections/databases needs. adminMongo is fully responsive and should work on a range of devices.
 
-> adminMongo connection information (including username/password) is stored unencrypted in a config file, it is not recommended to run this application on a production or public facing server without proper security considerations.
+> While some information can be protected, adminMongo connection information (including username/password) is stored unencrypted in a config file, it is not recommended to run this application on a production or public facing server without proper security considerations.
 
 ## Support
 
@@ -72,6 +72,7 @@ A read only demo can be seen [here](http://demo.adminmongo.markmoffat.com)
 * Collection statistics
 * Export collections in JSON format
 * Server monitoring
+* Integration with external authentication sources (optional)
 
 ### Current limitations
 
@@ -107,13 +108,13 @@ The config file (optional) options are:
 |`host`|`HOST`|The IP address  `adminMongo`  will listen on|
 |`port`|`PORT`|The Port `adminMongo` will listen on|
 |`password`|`PASSWORD`|An application level password to add simply authentication|
-|`locale`|`LOCALE`|The locale is automatically set to the detected locale of Nodejs. If there is not a translation, `adminMongo` will default to English. This setting overrides the default/detected value|
-|`context`|`CONTEXT`|Setting a `context` of "dbApp" is like changing the base URL of the app and will mean the app will listen on `http://10.0.0.1:4321/dbApp`. Ommiting a context will mean the application will listen on root. Eg: `http://10.0.0.1:4321`. This setting can be useful when running `adminMongo` behind Nginx etc.|
+|`locale`|`LOCALE`|The locale is automatically set to the detected locale of Node.js. If there is not a translation, `adminMongo` will default to English. This setting overrides the default/detected value|
+|`context`|`CONTEXT`|Setting a `context` of "dbApp" is like changing the base URL of the app and will mean the app will listen on `http://10.0.0.1:4321/dbApp`. Omitting a context will mean the application will listen on root. Eg: `http://10.0.0.1:4321`. This setting can be useful when running `adminMongo` behind Nginx etc.|
 |`monitoring`|`MONITORING`|Whether to run monitoring at regular intervals. Defaults to true or on|
 
 ### Setting a context path
 
-Setting a `context` of "dbApp" is like changing the base URL of the app and will mean the app will listen on `http://10.0.0.1:4321/dbApp`. Ommiting a context will mean the application will listen on
+Setting a `context` of "dbApp" is like changing the base URL of the app and will mean the app will listen on `http://10.0.0.1:4321/dbApp`. Omitting a context will mean the application will listen on
 root. Eg: `http://10.0.0.1:4321`. This setting can be useful when running `adminMongo` behind Nginx etc.
 
 An example Nginx server block. Note the `location /dbApp {` and `proxy_pass http://10.0.0.1:4321/dbApp;` lines match
@@ -151,22 +152,61 @@ will then be authenticated for the life of the session (60 mins by default) or i
 
 #### External Authentication
 
-`adminMongo` can be configured to use any external, OAuth2-based authentication source.  Response information from this source will be written as a Cookie 
-to maintain authentication.  The following environment variables are *required* for this option:
+`adminMongo` can be configured to use a single, external, OAuth2-based authentication source.  Response information from this source will be written as a Cookie 
+to maintain authentication, as well as any additional information the source itself may store.  The following environment variables are *all required* for 
+this option to be used:
 
 |Env-variable|Definition|
 |--- |--- |
-|`OAUTH_URL`|The URL for the authentication host to allow authentication credentials to be retrieved.  In general, this URL should provide a login page at the authentication source.| 
-|`OAUTH_CLIENT_ID`|The client or application Id for making requests to the authentication source| 
+|`OAUTH_AUTHORIZE_URL`|The URL for the authentication host to allow authentication credentials to be retrieved.  In general, this URL should provide a login page at the authentication source, and with a successful login, a token or code is sent back to `adminMongo`.|
+|`OAUTH_TOKEN_URL`|Given the token/code returned by `OAUTH_AUTHORIZE_URL`, this URL allows for an access token to be retrieved from the authentication source.|
+|`OAUTH_LOGOUT_URL`|Allows for the current user to be logged out of the authentication source|
+|`OAUTH_CLIENT_ID`|The client or application Id for making requests to the authentication source|
+|`OAUTH_CLIENT_SECRET`|The secret or password associated with `OAUTH_CLIENT_ID`|
 
-For more information on the URL fragment, see [Quora](https://www.quora.com/Why-do-OAuth-2-0-providers-return-access-tokens-in-the-hash-and-not-the-query-string).  
+```text
+NOTE: External authentication overrides all other authentication methods if it and 
+password authentication are configured
+```
+
+##### Protected Connections
+
+The external authentication is based on the concept of a connection being _protected_.  To define a connection as being protected, it must have **both** the username and password replaced by the `{DB_USERNAME}` and `{DB_PASSWORD}` placeholders within the connection string.  For example,
+
+```
+mongodb://dave:password@localhost:27017/myproject
+```
+
+would be entered into `adminMongo` as
+
+```
+mongodb://{DB_USERNAME}:{DB_PASSWORD}@localhost:27017/myproject
+```
+
+When trying to perform an action against a protected connection, the username and password must be entered into the corresponding fields, as those credentials will be validated before the selected action can be taken (`dave` and `password` in the above case).
+
+##### General Authentication Flow
+
+The following is the general flow of how the external authentication is integrated within `adminMongo`
+
+* The user navigates to a page in `adminMongo`, upon which the application checks to see if (a) authentication is needed, and (b) the user is authenticated
+* If no authentication is configured, the request proceeds
+* If password authentication is configured, a form is presented to allow the user to enter the password; the user is required to enter it and the original request proceeds if correct
+* If external authentication is configured, the following process occurs:
+  * A request is made to the authentication source at the URL configured by `OAUTH_AUTHORIZE_URL` above.  Parameters to this request include the URL within `adminMongo` where the user will be redirected to once authenticated.  The value of the `OAUTH_CLIENT_ID` variable is also used in this request.  This request will likely present a login screen at the authentication source where the user can enter their credentials.
+  * Once the previous step has completed, the user is redirected to an intermediate endpoint in `adminMongo` (a `GET` request to `/app/login/oauth`) which handles the response from the authentication source.  This request will contain a code in the URL query parameters that can then be used by `adminMongo` to make a second request back to the authentication source.  
+  * This second request is a `POST` to the URL configured by `OAUTH_TOKEN_URL` above, and it will return an OAuth2 token response as a JSON document (the request requires the `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` configuration values above).  The expiration of the cookie (token) is then determined by the current system date plus the value of the `expires_in` field in the original JSON response.  This expiration time is then added to the cookie and the cookie written to the browser response.  This tells `adminMongo` the user is logged in.
+* When the user requests to be logged out of `adminMongo`, the following actions occur, depending on how authentication is configured:
+  * If password authentication is configured, the session's logged-in flag is cleared, and the user is redirected back to the app's main page
+  * If external authentication is used, the logged-in flag is cleared; also, the cookie stored with the information from the authentication source is also removed, and the user is redirected to the authorization source's logout handling at the URL configured by `OAUTH_LOGOUT_URL` above.
+
 For the OAuth2 specification, see [IETF RFC-6749](https://tools.ietf.org/html/rfc6749).
 
 ## Usage
 
 ### Create a connection
 
-After visiting [http://127.0.0.1:1234](http://127.0.0.1:1234) you will be presented with a connection screen. You need to give your connection a unique name as a reference when using adminMongo and a MongoDB formatted connection string. The format of a MongoDB connection string can form: `mongodb://<user>:<password>@127.0.0.1:<port>/<db>` where specifying to the `<db>` level is optional. For more information on MongoDB connection strings, see the [official MongoDB documentation](http://docs.mongodb.org/manual/reference/connection-string/).
+After visiting [http://127.0.0.1:1234](http://127.0.0.1:1234) you will be presented with a connection screen. You need to give your connection a unique name as a reference when using adminMongo and a MongoDB formatted connection string. The format of a MongoDB connection string can form: `mongodb://<user>:<password>@127.0.0.1:<port>/<db>` where specifying to the `<db>` level is optional. For more information on MongoDB connection strings, see the [official MongoDB documentation](http://docs.mongodb.org/manual/reference/connection-string/).  For information on creating a 'protected' connection in `adminMongo` see the [External Authentication](#external-authentication) section above.
 
 You can supply a connection options object (see [docs](http://mongodb.github.io/node-mongodb-native/2.1/reference/connecting/connection-settings/)) with each connection.
 
@@ -193,8 +233,8 @@ The connection can also be automatically initiated through the environment (or w
 |`DB_PORT`|The port of the mongoDB database, if not provided the default 27017 will be used|
 |`DB_NAME`|The name of the database|
 
-*The Connection setup screen*
-![adminMongo connections screen](https://raw.githubusercontent.com/mrvautin/mrvautin.github.io/master/images/adminMongo/adminMongo_connections.png "adminMongo connections screen")
+*The Connection setup screen, with both public and protected connections*
+![adminMongo connections screen](./images/adminMongo_connections.png "adminMongo connections screen")
 
 ### Connection/Database admin
 
