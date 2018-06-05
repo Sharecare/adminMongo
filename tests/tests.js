@@ -9,6 +9,7 @@ var conn_name = 'TestConnection';
 var db_name = 'NewTestDB';
 var coll_name = 'NewTestCollection';
 var user_name = 'TestNewUser';
+var conn_string = 'mongodb://localhost:27017';
 
 const app = require('../app');
 var agent = request.agent(app);
@@ -17,7 +18,7 @@ describe('Add connection, database and collection', function(){
     it('Add a new connection', function(done){
         agent
             .post('/config/add_config')
-            .send({0: conn_name, 1: 'mongodb://localhost:27017', 2: '{}'})
+            .send({0: conn_name, 1: conn_string, 2: '{}'})
             .expect(200)
             .expect({'msg': 'Config successfully added'}, done);
     });
@@ -207,7 +208,7 @@ describe('Remove and remove collection and connection', function(){
     it('Remove the connection', function(done){
         agent
             .post('/config/drop_config')
-            .send({'curr_config': conn_name})
+            .send({'curr_config': conn_name, conn_string})
             .expect(200)
             .expect({'msg': 'Config successfully deleted'}, done);
     });

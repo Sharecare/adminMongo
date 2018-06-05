@@ -14,7 +14,8 @@
   },
   "scripts": {
     "start": "node app.js",
-    "test": "find ./tests -name '*.js' | xargs mocha -R spec -t 5000",
+    "test": "find ./tests -name '*tests.js' | xargs mocha --exit -R spec -t 5000",
+    "test-single": "mocha --exit $1",
     "packageOsx": "electron-packager ./ adminMongo --out=releases/ --platform=darwin --arch=x64 --prune --overwrite --ignore=releases/* --icon=public/logo.icns",
     "packageWin32": "electron-packager ./ adminMongo --out=releases/ --platform=win32 --arch=ia32 --prune --overwrite --ignore=releases/* --icon=public/logo.ico",
     "packageWin64": "electron-packager ./ adminMongo --out=releases/ --platform=win32 --arch=x64 --prune --overwrite --ignore=releases/* --icon=public/logo.ico",
